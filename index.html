@@ -410,7 +410,7 @@
         </div>
         <div class="temp" id="weatherTemp">…</div>
         <div class="condition" id="weatherCondition">불러오는 중</div>
-        <div class="location" id="weatherLocation">뉴욕 · New York</div>
+        <div class="location" id="weatherLocation">내 위치 확인 중…</div>
       </div>
     </div>
 
@@ -495,12 +495,7 @@
         document.getElementById("yearLine").textContent = y + "년";
       }
 
-      /* ── Weather (Open-Meteo, New York default) ── */
-      // New York City
-      var WEATHER_LAT = 40.7128;
-      var WEATHER_LON = -74.006;
-      var WEATHER_LABEL = "뉴욕 · New York";
-
+      /* ── Weather (Open-Meteo, device location, °F) ── */
       var WMO_KO = {
         0: "맑음",
         1: "대체로 맑음",
@@ -532,22 +527,23 @@
         99: "강한 우박 뇌우"
       };
 
-      function setWeatherFallback(msg) {
+      function setWeatherFallback(msg, locLabel) {
         document.getElementById("weatherTemp").textContent = "—";
         document.getElementById("weatherCondition").textContent = msg || "날씨를 불러올 수 없습니다";
         document.getElementById("weatherCondition").classList.add("fallback");
-        document.getElementById("weatherLocation").textContent = WEATHER_LABEL;
+        document.getElementById("weatherLocation").textContent = locLabel || "내 위치";
       }
 
-      function fetchWeather() {
+      function fetchWeatherAt(lat, lon, locLabel) {
         var url =
           "https://api.open-meteo.com/v1/forecast" +
-          "?latitude=" + WEATHER_LAT +
-          "&longitude=" + WEATHER_LON +
+          "?latitude=" + encodeURIComponent(lat) +
+          "&longitude=" + encodeURIComponent(lon) +
           "&current=temperature_2m,weather_code" +
-          "&timezone=America%2FNew_York";
+          "&temperature_unit=fahrenheit" +
+          "&timezone=auto";
 
-        fetch(url)
+        return fetch(url)
           .then(function (res) {
             if (!res.ok) throw new Error("HTTP " + res.status);
             return res.json();
@@ -558,14 +554,35 @@
             var temp = Math.round(cur.temperature_2m);
             var code = cur.weather_code;
             var cond = WMO_KO[code] || "알 수 없음";
-            document.getElementById("weatherTemp").textContent = temp + "°C";
+            document.getElementById("weatherTemp").textContent = temp + "°F";
             document.getElementById("weatherCondition").textContent = cond;
             document.getElementById("weatherCondition").classList.remove("fallback");
-            document.getElementById("weatherLocation").textContent = WEATHER_LABEL;
-          })
-          .catch(function () {
-            setWeatherFallback("오프라인 · 날씨 없음");
+            document.getElementById("weatherLocation").textContent = locLabel || "내 위치";
           });
+      }
+
+      function fetchWeather() {
+        document.getElementById("weatherLocation").textContent = "내 위치 확인 중…";
+        document.getElementById("weatherCondition").textContent = "불러오는 중";
+
+        if (!navigator.geolocation) {
+          setWeatherFallback("위치 기능을 쓸 수 없습니다", "내 위치");
+          return;
+        }
+
+        navigator.geolocation.getCurrentPosition(
+          function (pos) {
+            var lat = pos.coords.latitude;
+            var lon = pos.coords.longitude;
+            fetchWeatherAt(lat, lon, "내 위치").catch(function () {
+              setWeatherFallback("오프라인 · 날씨 없음", "내 위치");
+            });
+          },
+          function () {
+            setWeatherFallback("위치 허용이 필요해요", "내 위치");
+          },
+          { enableHighAccuracy: false, timeout: 12000, maximumAge: 300000 }
+        );
       }
 
       /* ── Todos ── */
